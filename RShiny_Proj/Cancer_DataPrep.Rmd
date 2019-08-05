@@ -1,0 +1,244 @@
+---
+title: "Cancer Data Prep"
+author: "Eric Meyers"
+date: "7/31/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
++ The Centers for Disease Control and Prevention (CDC) has collected data on incidents of Cancer diagnoses in the U.S. uniformly since 1999. The United States Cancer Statistics (USCS) are the official federal registries for cancer incidents collected, maintained, and distributed by the CDC. Data is collected and shown herein as the variables listed below.  For more information on the CDC and USCS, or to inspect/extract additional information, click [here](https://wonder.cdc.gov/cancer-v2015.html).
+    + Variables:
+        + State
+        + Year
+        + Age Group
+        + Gender
+        + Race
+        + Cancer Diagnosis Count
+
++ Purpose: To create an application that can easily identify trends associated with Cancer diagnoses in the U.S. pertaining to demographic and geographic attributes. Are there associations between gender, race, or age? Are there certain states that have proportionally more diagnoses than others? Is the rate at which cancer patients are being diagnosed increasing against population? Cancer research centers (i.e. Susan G Komen Foundation, CDC, etc.), hospitals, and people at risk for cancer should have information that will enable them to make important decisions on where to allocate resources and locate help and information from others. For specific analysis questions and visualizations, please see below.
+
+## 1. Data Preprocessing
+
+### 1.1 Import Libraries
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+scipen = 999
+```
+
+### 1.2 Load Datasets
++ Note: Data was extracted from a limited-capacity reporting console. I extracted five files with uniform criteria due to this limitation.
+```{r load_data, cache=TRUE, warning=FALSE, message=FALSE}
+cancer1 <- read_tsv('Cancer1.txt', col_names = TRUE)
+cancer2 <- read_tsv('Cancer2.txt', col_names = TRUE)
+cancer3 <- read_tsv('Cancer3.txt', col_names = TRUE)
+cancer4 <- read_tsv('Cancer4.txt', col_names = TRUE)
+cancer5 <- read_tsv('Cancer5.txt', col_names = TRUE)
+```
+
+### 1.3 Data Cleaning
+
+### 1.3.1. Remove first (notes) column as it does not pertain to data tables
+```{r preprocessing}
+
+cancer1 <- cancer1[,-1]
+cancer2 <- cancer2[,-1]
+cancer3 <- cancer3[,-1]
+cancer4 <- cancer4[,-1]
+cancer5 <- cancer5[,-1]
+```
+
+### 1.3.2. Drop null rows remaining from removing notes column
+```{r preprocessing}
+cancer1 <- drop_na(cancer1)
+cancer2 <- drop_na(cancer2)
+cancer3 <- drop_na(cancer3)
+cancer4 <- drop_na(cancer4)
+cancer5 <- drop_na(cancer5)
+```
+### 1.3.3. Clean format of a couple columns with inconsistent formats
+
+```{r preprocessing}
+cancer2['States Code'] <- lapply(cancer2['States Code'], as.character)
+cancer3['States Code'] <- lapply(cancer3['States Code'], as.character)
+cancer4['States Code'] <- lapply(cancer4['States Code'], as.character)
+cancer5['States Code'] <- lapply(cancer5['States Code'], as.character)
+```
+
+### 1.3.4. Clean NA's in Count field and convert to numeric
+```{r preprocessing}
+cancer5$Count[is.na(cancer5$Count)] <- 0
+cancer5$Count <- sapply(cancer5$Count, as.numeric)
+```
+
+### 1.4 Data Merging & Column Formatting
+```{r data merging}
+# 1. Combine files into one master by binding rows.
+cancer.all <- bind_rows(cancer1, cancer2, cancer3, cancer4, cancer5)
+
+# 2. Reformat column names to remove spaces and backward apostrophes.
+colnames(cancer.all) <- gsub(' ', '.', colnames(cancer.all))
+colnames(cancer.all) <- gsub('`', '', colnames(cancer.all))
+
+# 3. Change Age Groups to numeric for consistent plotting
+
+cancer.all$Age.Groups.Code <- substr(cancer.all$Age.Groups.Code, 1, 2)
+cancer.all$Age.Groups.Code <- gsub('-', '', cancer.all$Age.Groups.Code)
+cancer.all$Age.Groups.Code <- as.numeric(cancer.all$Age.Groups.Code)
+
+# 4. Drop any remaining NA values.
+cancer.all <- drop_na(cancer.all)
+
+# 5. Check dimensions of data and no null values.
+dim(cancer.all)
+sum(is.na(cancer.all))
+```
+
+## 1.4 Write cleaned file as csv for Shiny App
+
+```{r write file}
+write_csv(cancer.all, path = './cancer/Cancer.csv')
+```
+
+## 2. Data Analysis & Visualization
+### Questions we want to answer from this dataset:
+
+- QUESTION 1: At which age are people most likely to be diagnosed with Cancer?
+- QUESTION 2: Are there any races that are diagnosed more than others?
+- QUESTION 3: Are Cancer diagnoses increasing year-over-year?
+- QUESTION 4: Is one gender diagnosed more than the other?
+- QUESTION 5: Which States have more/less Cancer diagnoses?
+- QUESTION 6: Are there differences in the age different races are diagnosed?
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r load data}
+cancer = read_csv('./cancer/Cancer.csv')
+cancer$Age.Groups.Code <- substr(cancer$Age.Groups.Code, 1, 2)
+cancer$Age.Groups.Code <- gsub('-', '', cancer$Age.Groups.Code)
+cancer$Age.Groups.Code <- as.numeric(cancer$Age.Groups.Code)
+```
+
+
+## 2.1 One-Attribute Distributions (Counts)
+
+### 2.1.1 Age Group
+
+```{r, distributions, echo = FALSE}
+# Age Group
+ggplot(cancer, mapping = aes(x = factor(Age.Groups.Code), y = Count)) +
+    geom_col(fill = 'blue') + ggtitle("Cancer Diagnoses by Age Group") +
+    xlab("Age Group") + ylab("Count") + theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"))
+
+```
+
+- ANSWER 1: Most people are diagnosed with Cancer between ages 50 and 85.
+The peak age group for diagnoses is at age 65.
+
+### 2.1.2 Race
+
+```{r distributions, echo = FALSE}
+
+ggplot(cancer, mapping = aes(x = reorder(Race, Count), y = Count)) +
+    geom_col(aes(fill = Race)) + ggtitle("Cancer Diagnoses by Race") +
+    xlab("Race") + ylab("Count") +
+    scale_x_discrete(labels = function(x) lapply(strwrap(x, width = 10, simplify = FALSE), paste, collapse="\n"))
+    
+
+```
+
+- ANSWER 2: Roughly 90% of people in the U.S. diagnosed with Cancer are of caucasian ethnicity, followed by roughly 8% African-American. This is compared to the roughly 77% population of caucasians and 13% of African-Americans living in the U.S.
+
+### 2.1.3 Year
+
+```{r distributions, echo = FALSE}
+
+ggplot(data = cancer, mapping = aes(x = Year, y = Count)) +
+    geom_col(fill = "blue") + ggtitle("Cancer Diagnoses by Year") +
+    xlab("Year") + ylab("Count") + theme(axis.text.x = element_text(angle = 45))
+
+```
+
+- ANSWER 3: Diagnoses of Cancer are rising by roughly 2% each year from 1999 to 2015.  The average increase in population in the same period is 0.9%.
+
+### 2.1.4 Sex
+
+```{r distributions, echo = FALSE}
+
+ggplot(data = cancer, mapping = aes(x = Sex, y = Count)) +
+    geom_col(aes(color = Sex)) + ggtitle("Cancer Diagnoses by Gender") +
+    xlab("Sex") + ylab("Count")
+
+```
+
+- ANSWER 4: There appears to be no difference in diagnoses by gender.
+
+### 2.1.5 States
+
+```{r distributions, echo = FALSE}
+
+ggplot(cancer, mapping = aes(x = reorder(States, Count), y = Count)) +
+    geom_col(fill = "purple") + coord_flip() +
+    ggtitle("Cancer Diagnoses by State") + xlab("State") + ylab("Count")
+
+```
+
+- ANSWER 5: The amount of Cancer diagnoses per state generally tends to follow the amount of population living in that state.  There is a notable exeption with Texas where there are proportionately less diagnoses than population compared to other states.
+
+## 2.2 Combinations
+
+### 2.2.1 Age of Diagnoses (Counts) by Race
+
+```{r, Combinations, echo = FALSE}
+
+# Age of Diagnoses by Race
+ggplot(cancer, mapping = aes(x = Race, y = Age.Groups.Code)) + geom_boxplot(aes(fill = Race)) + ggtitle("Age Distribution by Race") +
+    xlab("Race") + ylab("Age") +
+    scale_x_discrete(labels = function(x) lapply(strwrap(x, width = 10, simplify = FALSE), paste, collapse="\n"))
+```
+
+- ANSWER 6: Caucasian and African-American, while roughly comprising of 98% of diagnosed people in the U.S., tend to be diagnosed at an older age (median age 55) as compared to Asian/Pacific (median age 35), Other (median age 35), and Native Americans (median age 25).
+
+### 2.2.2 Age of Diagnoses by Gender
+
+```{r combinations, echo = FALSE}
+
+ggplot(cancer, mapping = aes(x = Sex, y = Age.Groups.Code)) + geom_boxplot(aes(fill = Sex)) + ggtitle("Age Distribution by Gender") +
+    xlab("Sex") + ylab("Age")
+
+```
+
+- (See ANSWER 4)
+
+### 2.2.3 Mosaic: Race & Age Counts by Sex
+
+```{r combinations, echo = FALSE}
+library(vcd)
+mosaic(Race ~ Age.Groups.Code + Sex, data=cancer, 
+       main = "Age & Race by Gender",shade=T,
+       labeling= labeling_border(set_varnames = c(Age.Groups.Code="Age Group"),
+                                 rot_labels = c(0,90,-15,0), 
+                                just_labels=c("center","left","left","center")),
+       highlighting_fill=c('violetred',"pink", "green", "blue", "yellow"),
+       highlighting_direction="left")
+```
+
+## 3. Future Work
+
+ - Further optimize Shiny App by reducing duplication in code and consolidating to global.R.
+ - Create more interaction between Home page, allowing users to link directly to visualizations from the main page outside of the left menu
+ - Extract statistical inference and statistical hypothesis testing to the Race and Age demographics to validate the significance in different Race and Age groups observed in the Analysis section.
+ - Expand scope of App to include other diseases additional to Cancer.
+ - Expand scope of App to include territories outside of the U.S.
+ - Adjust axis labels on Mosaic chart for less clutter. Test accuracy of groupings.  Just spot checking, the 90% caucasian from other analysis does not appear consistent with this chart.
+ - Create Reactive Functions that disable filters without underlying data associated to appear.
+ - Research and validate accuracy of source (CBC) Data.
