@@ -4,6 +4,8 @@ library(DT)
 library(googleVis)
 library(ggthemes)
 library(vcd)
+library(dplyr)
+library(ggplot2)
 
 options(scipen=20)
 
